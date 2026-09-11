@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#4f46e5" />
+<meta name="description" content="Split bills with friends and settle up instantly over UPI." />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="SplitUPI" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%B8%3C/text%3E%3C/svg%3E" />
+<title>SplitUPI — Bill Splitting</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  html { -webkit-text-size-adjust: 100%; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .modal { display: none; }
+  .modal.active { display: flex; animation: fade .12s ease-out; }
+  .modal.active > div { animation: pop .14s ease-out; }
+  @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
+  .tab-btn.active { background: #4f46e5; color: #fff; }
+  .toast { animation: slideIn .18s ease-out; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-8px) } to { opacity: 1; transform: none } }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  button:disabled { cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+    outline: 2px solid #4f46e5; outline-offset: 2px;
+  }
+  .skeleton { position: relative; overflow: hidden; background: #e2e8f0; }
+  .skeleton::after {
+    content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+</style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 antialiased">
+
+<!-- ==================== AUTH SCREEN ==================== -->
+<div id="auth-screen" class="fixed inset-0 z-[100] bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center p-4 overflow-y-auto">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 my-8">
+    <div class="text-center mb-6">
+      <div class="text-4xl mb-1">💸</div>
+      <h1 class="text-xl font-bold">SplitUPI</h1>
+      <p class="text-sm text-slate-500">Split bills, not friendships</p>
+    </div>
+
+    <div id="auth-error" class="hidden bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg p-3 mb-4"></div>
+
+    <div class="space-y-3">
+      <div id="auth-name-wrap" class="hidden">
+        <label for="auth-name" class="text-xs font-semibold text-slate-600 uppercase">Your name</label>
+        <input id="auth-name" type="text" placeholder="e.g. Priya" autocomplete="name"
+          class="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none" />
+      </div>
+      <div id="auth-upi-wrap" class="hidden">
+        <label for="auth-upi" class="text-xs font-semibold text-slate-600 uppercase">UPI ID (optional)</label>
+        <input id="auth-upi" type="text" placeholder="e.g. priya@okaxis" autocomplete="off" inputmode="email"
+          class="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none" />
+      </div>
+      <div>
+        <label for="auth-email" class="text-xs font-semibold text-slate-600 uppercase">Email</label>
+        <input id="auth-email" type="email" placeholder="you@example.com" autocomplete="email"
+          class="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none" />
+      </div>
+      <div>
+        <label for="auth-password" class="text-xs font-semibold text-slate-600 uppercase">Password</label>
+        <input id="auth-password" type="password" placeholder="Min. 6 characters" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')handleAuth()"
+          class="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none" />
+        <button onclick="forgotPassword()" class="text-xs text-indigo-600 hover:underline mt-1">Forgot password?</button>
+      </div>
+    </div>
+
+    <button id="auth-submit" onclick="handleAuth()"
+      class="w-full mt-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold flex items-center justify-center gap-2 transition">
+      <span id="auth-btn-text">Sign in</span>
+    </button>
+
+    <p class="text-center text-sm text-slate-500 mt-4">
+      <span id="auth-toggle-text">Don't have an account?</span>
+      <button onclick="toggleAuthMode()" class="text-indigo-600 font-semibold hover:underline">
+        <span id="auth-toggle-btn">Sign up</span>
+      </button>
+    </p>
+  </div>
+</div>
+
+<!-- ==================== HEADER ==================== -->
+<header id="app-header" class="hidden bg-white/90 backdrop-blur border-b border-slate-200 sticky top-0 z-30">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+    <button onclick="goDashboard()" class="flex items-center gap-2 shrink-0" aria-label="Go to dashboard">
+      <span class="text-2xl">💸</span>
+      <span class="font-bold text-lg tracking-tight">SplitUPI</span>
+    </button>
+    <div class="flex items-center gap-2 min-w-0">
+      <button onclick="editProfile()" class="text-right hidden sm:block min-w-0 max-w-[160px]" title="Edit your profile">
+        <div id="hdr-name" class="text-sm font-semibold truncate">—</div>
+        <div id="hdr-upi" class="text-xs text-slate-500 truncate">—</div>
+      </button>
+      <button onclick="signOut()" aria-label="Sign out"
+        class="text-sm text-slate-500 hover:text-rose-600 font-medium px-3 py-1.5 rounded-lg border border-slate-200">
+        Sign out
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="max-w-3xl mx-auto p-4 pb-28"></main>
+
+<!-- ==================== MODAL: GROUP ==================== -->
+<div id="modal-group" class="modal fixed inset-0 bg-black/40 z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" role="dialog" aria-modal="true">
+    <h2 class="text-lg font-bold mb-4">Create a Group</h2>
+    <input id="group-name" type="text" placeholder="e.g. Goa Trip 2026" autocomplete="off"
+      onkeydown="if(event.key==='Enter')createGroup()"
+      class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none mb-4" />
+    <div class="flex gap-2">
+      <button onclick="closeModal('modal-group')" class="flex-1 py-2.5 rounded-lg border border-slate-300 font-medium hover:bg-slate-50">Cancel</button>
+      <button id="group-create-btn" onclick="createGroup()" class="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-60">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: MEMBER ==================== -->
+<div id="modal-member" class="modal fixed inset-0 bg-black/40 z-50 items-start justify-center p-4 overflow-y-auto">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 my-8" role="dialog" aria-modal="true">
+    <h2 class="text-lg font-bold mb-4">Add Member</h2>
+    <div id="member-options" class="space-y-2 max-h-60 overflow-y-auto mb-2"></div>
+    <div class="border-t pt-4 mt-2">
+      <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Invite by email</p>
+      <input id="member-email" type="email" placeholder="friend@example.com" autocomplete="off"
+        onkeydown="if(event.key==='Enter')addMemberByEmail()"
+        class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none" />
+      <p class="text-[11px] text-slate-400 mt-2">They need a SplitUPI account. Or use 🔗 Share for a link.</p>
+    </div>
+    <div class="flex gap-2 mt-5">
+      <button onclick="closeModal('modal-member')" class="flex-1 py-2.5 rounded-lg border border-slate-300 font-medium hover:bg-slate-50">Close</button>
+      <button id="member-email-btn" onclick="addMemberByEmail()" class="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-60">Add by email</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: SHARE ==================== -->
+<div id="modal-share" class="modal fixed inset-0 bg-black/40 z-50 items-start justify-center p-4 overflow-y-auto">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 my-8" role="dialog" aria-modal="true">
+    <h2 class="text-lg font-bold mb-1">Share group</h2>
+    <p class="text-sm text-slate-500 mb-4">Anyone with this link can join and start splitting.</p>
+
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
+      <div class="text-xs font-semibold text-slate-500 uppercase mb-1">Invite link</div>
+      <div id="share-link" class="text-sm font-mono break-all text-slate-700 select-all"></div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2 mb-3">
+      <button onclick="copyInviteLink()" class="py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">
+        📋 Copy link
+      </button>
+      <button id="share-native-btn" onclick="shareNative()" class="py-2.5 rounded-lg border border-slate-300 font-semibold text-sm hover:bg-slate-50">
+        📤 Share via…
+      </button>
+    </div>
+
+    <div class="border-t pt-4">
+      <div class="text-xs font-semibold text-slate-500 uppercase mb-2">Or share a summary</div>
+      <div id="share-summary" class="text-sm text-slate-600 bg-slate-50 rounded-xl p-3 max-h-40 overflow-y-auto whitespace-pre-wrap font-mono mb-2"></div>
+      <button onclick="copySummary()" class="w-full py-2.5 rounded-lg border border-slate-300 font-semibold text-sm hover:bg-slate-50">
+        Copy summary text
+      </button>
+    </div>
+
+    <button onclick="closeModal('modal-share')" class="w-full py-2 text-sm text-slate-400 hover:text-slate-600 mt-4">Close</button>
+  </div>
+</div>
+
+<!-- ==================== MODAL: JOIN ==================== -->
+<div id="modal-join" class="modal fixed inset-0 bg-black/40 z-50 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" role="dialog" aria-modal="true">
+    <div class="text-center mb-4">
+      <div class="text-4xl mb-2">👋</div>
+      <h2 class="text-lg font-bold">You're invited!</h2>
+      <p class="text-sm text-slate-500 mt-1">Join <span id="join-group-name" class="font-semibold text-slate-700">this group</span> to start splitting expenses.</p>
+    </div>
+    <div id="join-error" class="hidden bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg p-3 mb-4"></div>
+    <div class="flex gap-2">
+      <button onclick="cancelJoin()" class="flex-1 py-2.5 rounded-lg border border-slate-300 font-medium hover:bg-slate-50">Not now</button>
+      <button id="join-accept-btn" onclick="acceptJoin()" class="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+        Join group
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: EXPENSE ==================== -->
+<div id="modal-expense" class="modal fixed inset-0 bg-black/40 z-50 items-start justify-center p-4 overflow-y-auto">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 my-8" role="dialog" aria-modal="true">
+    <h2 id="expense-modal-title" class="text-lg font-bold mb-4">Add Expense</h2>
+    <div class="space-y-4">
+      <div>
+        <label for="exp-note" class="text-xs font-semibold text-slate-600 uppercase">Description</label>
+        <input id="exp-note" type="text" placeholder="e.g. Dinner at beach shack" autocomplete="off"
+          class="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none" />
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="exp-amount" class="text-xs font-semibold text-slate-600 uppercase">Amount (₹)</label>
+          <input id="exp-amount" type="text" inputmode="decimal" placeholder="0.00" autocomplete="off"
+            class="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none font-semibold" />
+        </div>
+        <div>
+          <label for="exp-category" class="text-xs font-semibold text-slate-600 uppercase">Category</label>
+          <select id="exp-category"
+            class="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none bg-white">
+            <option>Food</option><option>Travel</option><option>Stay</option>
+            <option>Shopping</option><option>Entertainment</option><option>Utilities</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="exp-date" class="text-xs font-semibold text-slate-600 uppercase">Date</label>
+          <input id="exp-date" type="date"
+            class="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none bg-white" />
+        </div>
+        <div>
+          <label for="exp-payer" class="text-xs font-semibold text-slate-600 uppercase">Paid by</label>
+          <select id="exp-payer"
+            class="mt-1 w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none bg-white"></select>
+        </div>
+      </div>
+      <div>
+        <span class="text-xs font-semibold text-slate-600 uppercase">Split type</span>
+        <div class="grid grid-cols-3 gap-2 mt-1">
+          <button type="button" data-split="equal" onclick="setSplitType('equal')"
+            class="split-opt py-2 rounded-lg border-2 font-semibold text-sm">Equal</button>
+          <button type="button" data-split="custom" onclick="setSplitType('custom')"
+            class="split-opt py-2 rounded-lg border-2 font-semibold text-sm">Exact ₹</button>
+          <button type="button" data-split="shares" onclick="setSplitType('shares')"
+            class="split-opt py-2 rounded-lg border-2 font-semibold text-sm">Shares</button>
+        </div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-600 uppercase">Participants</span>
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="toggleAllParticipants()" class="text-xs font-semibold text-indigo-600 hover:underline">All / none</button>
+            <button type="button" id="exp-fill-even" onclick="fillEvenly()" class="text-xs font-semibold text-indigo-600 hover:underline hidden">Fill evenly</button>
+          </div>
+        </div>
+        <div id="exp-participants" class="mt-2 space-y-1.5 max-h-64 overflow-y-auto pr-1"></div>
+        <div id="exp-split-hint" class="text-xs text-slate-500 mt-2 min-h-[18px]"></div>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-6">
+      <button onclick="closeModal('modal-expense')" class="flex-1 py-2.5 rounded-lg border border-slate-300 font-medium hover:bg-slate-50">Cancel</button>
+      <button id="expense-save-btn" onclick="saveExpense()" class="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-60"><span id="expense-save-btn-text">Save expense</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: EXPENSE DETAIL ==================== -->
+<div id="modal-expense-detail" class="modal fixed inset-0 bg-black/40 z-50 items-start justify-center p-4 overflow-y-auto">
+  <div id="expense-detail-body" class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 my-8" role="dialog" aria-modal="true"></div>
+</div>
+
+<!-- ==================== MODAL: UPI QR ==================== -->
+<div id="modal-qr" class="modal fixed inset-0 bg-black/40 z-50 items-center justify-center p-4 overflow-y-auto">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center my-8" role="dialog" aria-modal="true">
+    <h2 class="text-lg font-bold mb-1">Pay via UPI</h2>
+    <p id="qr-subtitle" class="text-sm text-slate-500 mb-4"></p>
+    <div class="bg-slate-50 rounded-xl p-4 inline-block mb-4">
+      <div id="qr-container"></div>
+    </div>
+    <div id="qr-details" class="text-sm text-slate-600 mb-4 space-y-1"></div>
+    <a id="qr-deeplink" href="#"
+      class="block w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold mb-2">
+      Open UPI app
+    </a>
+    <button id="qr-copy" onclick="copyPayeeUpi()"
+      class="w-full py-2.5 rounded-lg border border-slate-300 font-semibold text-sm mb-2 hover:bg-slate-50">
+      Copy UPI ID
+    </button>
+    <button id="qr-settle-btn" onclick="markPaid()"
+      class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold mb-2 disabled:opacity-60">
+      ✅ Mark as settled
+    </button>
+    <button onclick="closeModal('modal-qr')" class="w-full py-2 text-sm text-slate-400 hover:text-slate-600">Close</button>
+  </div>
+</div>
+
+<!-- ==================== MODAL: CONFIRM ==================== -->
+<div id="modal-confirm" class="modal fixed inset-0 bg-black/50 z-[60] items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" role="dialog" aria-modal="true">
+    <h2 id="confirm-title" class="text-lg font-bold mb-1">Are you sure?</h2>
+    <p id="confirm-msg" class="text-sm text-slate-500 mb-5"></p>
+    <div class="flex gap-2">
+      <button onclick="resolveConfirm(false)" class="flex-1 py-2.5 rounded-lg border border-slate-300 font-medium hover:bg-slate-50">Cancel</button>
+      <button id="confirm-ok" onclick="resolveConfirm(true)" class="flex-1 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TOASTS ==================== -->
+<div id="toasts" role="status" aria-live="polite" class="fixed top-20 left-1/2 -translate-x-1/2 z-[70] flex flex-col items-center gap-2 pointer-events-none px-4 w-full max-w-sm"></div>
+
+<script type="module">
+/* ============================================================
+   Firebase — SplitUPI
+   ============================================================ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  signOut as fbSignOut, onAuthStateChanged, updateProfile,
+  sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc,
+  updateDoc, deleteDoc, query, where, orderBy, onSnapshot,
+  serverTimestamp, writeBatch, arrayUnion
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqdD3YZtDir-OploW0vuONW8ZhsLA5M_Y",
+  authDomain: "splitupi-ce51c.firebaseapp.com",
+  projectId: "splitupi-ce51c",
+  storageBucket: "splitupi-ce51c.firebasestorage.app",
+  messagingSenderId: "51828260637",
+  appId: "1:51828260637:web:4d75b151893f3f1e84abf4",
+  measurementId: "G-6HQM4TJDP0"
+};
+
+console.log('[SplitUPI] Initializing Firebase…');
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+console.log('[SplitUPI] Firebase ready');
+
+/* ============================================================
+   State
+   ============================================================ */
+let currentUser = null;
+let profile     = null;
+let users       = {};
+let groups      = [];
+let expenses    = [];
+let settlements = [];
+let view        = { name: 'dashboard' };
+let unsubscribers = [];
+let groupsLoaded  = false;
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
+const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
+const fmt = n => '₹' + Math.abs(Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+function parseAmount(v) {
+  const n = parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? round2(n) : 0;
+}
+function initials(name) {
+  const parts = String(name || '?').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return ((parts[0][0] || '') + (parts[1]?.[0] || '')).toUpperCase();
+}
+const getUser  = uid => users[uid] || { name: 'Unknown', upiId: '' };
+const getGroup = id  => groups.find(g => g.id === id);
+const isMe     = id  => id === currentUser?.uid;
+
+const COLORS = ['bg-indigo-500','bg-emerald-500','bg-rose-500','bg-amber-500','bg-sky-500','bg-violet-500','bg-teal-500','bg-fuchsia-500'];
+function colorFor(id) {
+  const s = String(id || '?');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return COLORS[h % COLORS.length];
+}
+const avatar = (id, size = 'w-10 h-10', text = 'text-sm') =>
+  `<div class="${size} rounded-full ${colorFor(id)} text-white ${text} flex items-center justify-center font-bold shrink-0">${initials(getUser(id).name)}</div>`;
+
+function relativeDate(iso) {
+  if (!iso) return '';
+  const d = iso.toDate ? iso.toDate() : new Date(iso);
+  const now = new Date();
+  const days = Math.floor((now - d) / 86400000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return days + ' days ago';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+}
+
+/* ============================================================
+   Toasts
+   ============================================================ */
+function toast(message, type = 'success') {
+  const styles = { success:'bg-slate-900 text-white', error:'bg-rose-600 text-white', info:'bg-white text-slate-800 border border-slate-200' };
+  const el = document.createElement('div');
+  el.className = `toast ${styles[type] || styles.info} px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium pointer-events-auto`;
+  el.textContent = message;
+  $('toasts').appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity .2s, transform .2s';
+    el.style.opacity = '0'; el.style.transform = 'translateY(-6px)';
+    setTimeout(() => el.remove(), 220);
+  }, 2400);
+}
+
+/* ============================================================
+   Modals
+   ============================================================ */
+function openModal(id) {
+  const m = $(id); if (!m) return;
+  m.classList.add('active'); document.body.style.overflow = 'hidden';
+  const first = m.querySelector('input:not([type=hidden]), select, button');
+  if (first) setTimeout(() => first.focus({ preventScroll: true }), 60);
+}
+function closeModal(id) {
+  const m = $(id); if (m) m.classList.remove('active');
+  if (!document.querySelector('.modal.active')) document.body.style.overflow = '';
+  if (id === 'modal-confirm' && confirmResolve) { const r = confirmResolve; confirmResolve = null; r(false); }
+}
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const open = [...document.querySelectorAll('.modal.active')].pop();
+  if (open) closeModal(open.id);
+});
+document.querySelectorAll('.modal').forEach(m => {
+  m.addEventListener('mousedown', e => { if (e.target === m) closeModal(m.id); });
+});
+
+/* ============================================================
+   Confirm dialog
+   ============================================================ */
+let confirmResolve = null;
+function confirmDialog({ title = 'Are you sure?', message = '', confirmText = 'Confirm', danger = true } = {}) {
+  return new Promise(resolve => {
+    confirmResolve = resolve;
+    $('confirm-title').textContent = title;
+    $('confirm-msg').textContent = message;
+    const ok = $('confirm-ok');
+    ok.textContent = confirmText;
+    ok.className = `flex-1 py-2.5 rounded-lg text-white font-semibold ${danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'}`;
+    openModal('modal-confirm');
+  });
+}
+function resolveConfirm(v) { const r = confirmResolve; confirmResolve = null; closeModal('modal-confirm'); if (r) r(v); }
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+let authMode = 'signin';
+
+function applyAuthUI() {
+  const isSignup = authMode === 'signup';
+  $('auth-btn-text').textContent    = isSignup ? 'Create account' : 'Sign in';
+  $('auth-toggle-text').textContent = isSignup ? 'Already have an account?' : "Don't have an account?";
+  $('auth-toggle-btn').textContent  = isSignup ? 'Sign in' : 'Sign up';
+  $('auth-name-wrap').classList.toggle('hidden', !isSignup);
+  $('auth-upi-wrap').classList.toggle('hidden', !isSignup);
+  $('auth-error').classList.add('hidden');
+}
+
+function toggleAuthMode() {
+  authMode = authMode === 'signin' ? 'signup' : 'signin';
+  applyAuthUI();
+}
+
+function authError(msg) {
+  const box = $('auth-error');
+  box.textContent = msg;
+  box.classList.remove('hidden');
+  console.error('[SplitUPI auth error]', msg);
+}
+
+async function handleAuth() {
+  const email    = $('auth-email').value.trim().toLowerCase();
+  const password = $('auth-password').value;
+  const name     = $('auth-name').value.trim();
+  const upi      = $('auth-upi').value.trim();
+  const btn      = $('auth-submit');
+
+  $('auth-error').classList.add('hidden');
+
+  if (!email) return authError('Please enter your email.');
+  if (!password) return authError('Please enter your password.');
+  if (authMode === 'signup' && !name) return authError('Please enter your name.');
+  if (password.length < 6) return authError('Password must be at least 6 characters.');
+
+  btn.disabled = true;
+  const original = $('auth-btn-text').textContent;
+  $('auth-btn-text').textContent = 'Please wait…';
+
+  try {
+    if (authMode === 'signup') {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        uid: cred.user.uid,
+        name, email, upiId: upi || '',
+        createdAt: serverTimestamp()
+      });
+      try { await updateProfile(cred.user, { displayName: name }); } catch (_) {}
+      toast('Welcome to SplitUPI!');
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+    }
+  } catch (err) {
+    console.error('[SplitUPI] auth failed', err);
+    authError(friendlyAuthError(err));
+  } finally {
+    btn.disabled = false;
+    $('auth-btn-text').textContent = original;
+  }
+}
+
+async function forgotPassword() {
+  const email = $('auth-email').value.trim();
+  if (!email) return authError('Enter your email first, then tap "Forgot password".');
+  try {
+    await sendPasswordResetEmail(auth, email);
+    toast('Password reset email sent');
+  } catch (err) { console.error(err); authError(friendlyAuthError(err)); }
+}
+
+function friendlyAuthError(err) {
+  const code = err?.code || '';
+  const map = {
+    'auth/email-already-in-use'  : 'That email is already registered. Try signing in instead.',
+    'auth/invalid-email'         : 'That email address looks invalid.',
+    'auth/weak-password'         : 'Password is too weak — use at least 6 characters.',
+    'auth/user-not-found'        : 'No account found with that email. Sign up first.',
+    'auth/wrong-password'        : 'Incorrect password.',
+    'auth/invalid-credential'    : 'Incorrect email or password.',
+    'auth/too-many-requests'     : 'Too many attempts. Please wait a minute and try again.',
+    'auth/network-request-failed': 'Network error — check your internet connection.',
+    'auth/operation-not-allowed' : '⚠️ Email/Password sign-in is NOT enabled. Enable it in Firebase Console → Authentication → Sign-in method.',
+    'auth/configuration-not-found': '⚠️ Firebase Auth is not configured for this project.',
+    'permission-denied'          : '⚠️ Firestore rules blocked this operation.',
+    'unavailable'                : 'Cannot reach Firestore. Check your internet.'
+  };
+  return map[code] || (err?.message ? err.message : 'Something went wrong. Check the browser console.');
+}
+
+async function signOut() {
+  const ok = await confirmDialog({
+    title: 'Sign out?',
+    message: 'Your data stays safe in the cloud. Sign back in any time.',
+    confirmText: 'Sign out', danger: false
+  });
+  if (!ok) return;
+  detachListeners();
+  await fbSignOut(auth);
+}
+
+/* ============================================================
+   AUTH STATE
+   ============================================================ */
+onAuthStateChanged(auth, async user => {
+  console.log('[SplitUPI] onAuthStateChanged →', user ? user.email : 'no user');
+
+  if (!user) {
+    currentUser = null; profile = null;
+    users = {}; groups = []; expenses = []; settlements = [];
+    detachListeners();
+    showAuth();
+    return;
+  }
+
+  currentUser = user;
+
+  try {
+    const ref  = doc(db, 'users', user.uid);
+    const snap = await getDoc(ref);
+
+    if (snap.exists()) {
+      profile = snap.data();
+    } else {
+      profile = {
+        uid: user.uid,
+        name: user.displayName || 'User',
+        email: user.email || '',
+        upiId: ''
+      };
+      await setDoc(ref, { ...profile, createdAt: serverTimestamp() });
+    }
+
+    users[user.uid] = profile;
+    showApp();
+    attachListeners();
+  } catch (err) {
+    console.error('[SplitUPI] profile load failed', err);
+    profile = { uid: user.uid, name: user.displayName || 'User', email: user.email || '', upiId: '' };
+    users[user.uid] = profile;
+    showApp();
+    attachListeners();
+    toast('Profile loaded in offline mode — some features may be limited', 'error');
+  }
+});
+
+function showApp() {
+  console.log('[SplitUPI] showing app');
+  $('auth-screen').classList.add('hidden');
+  $('app-header').classList.remove('hidden');
+  $('hdr-name').textContent = profile?.name || '—';
+  $('hdr-upi').textContent  = profile?.upiId || 'No UPI ID set';
+  view = { name: 'dashboard' };
+  groupsLoaded = false;
+  render();
+  flushPendingJoin().then(() => checkJoinParam());
+}
+
+function renderDashboardSkeleton() {
+  $('main').innerHTML = `
+    <div class="grid grid-cols-2 gap-3 mb-6">
+      <div class="skeleton rounded-xl h-20"></div>
+      <div class="skeleton rounded-xl h-20"></div>
+    </div>
+    <div class="flex items-center justify-between mb-3">
+      <div class="skeleton rounded h-6 w-28"></div>
+      <div class="skeleton rounded-lg h-9 w-28"></div>
+    </div>
+    <div class="space-y-3">
+      <div class="skeleton rounded-xl h-20"></div>
+      <div class="skeleton rounded-xl h-20"></div>
+      <div class="skeleton rounded-xl h-20"></div>
+    </div>`;
+}
+
+function showAuth() {
+  console.log('[SplitUPI] showing auth');
+  $('auth-screen').classList.remove('hidden');
+  $('app-header').classList.add('hidden');
+  $('main').innerHTML = '';
+  $('auth-email').value = '';
+  $('auth-password').value = '';
+  $('auth-name').value = '';
+  $('auth-upi').value = '';
+  authMode = 'signin';
+  applyAuthUI();
+}
+
+/* ============================================================
+   FIRESTORE LISTENERS
+   ============================================================ */
+function attachListeners() {
+  detachListeners();
+  const myUid = currentUser.uid;
+
+  const groupsQ = query(collection(db, 'groups'), where('members', 'array-contains', myUid));
+  unsubscribers.push(onSnapshot(groupsQ, snap => {
+    groups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    groupsLoaded = true;
+    hydrateUsers(groups.flatMap(g => g.members));
+    render();
+  }, err => { console.error('groups listener', err); groupsLoaded = true; toast('Lost connection to groups', 'error'); render(); }));
+
+  const expQ = query(collection(db, 'expenses'),
+    where('groupMembers', 'array-contains', myUid),
+    orderBy('date', 'desc'));
+  unsubscribers.push(onSnapshot(expQ, snap => {
+    expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, err => { console.error('expenses listener', err); toast('Lost connection to expenses', 'error'); }));
+
+  const setQ = query(collection(db, 'settlements'),
+    where('groupMembers', 'array-contains', myUid),
+    orderBy('paidAt', 'desc'));
+  unsubscribers.push(onSnapshot(setQ, snap => {
+    settlements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, err => { console.error('settlements listener', err); toast('Lost connection to settlements', 'error'); }));
+}
+
+function detachListeners() {
+  unsubscribers.forEach(u => { try { u(); } catch (_) {} });
+  unsubscribers = [];
+}
+
+const fetchedUsers = new Set();
+async function hydrateUsers(uids) {
+  const missing = [...new Set(uids)].filter(u => u && !users[u] && !fetchedUsers.has(u));
+  if (!missing.length) return;
+  missing.forEach(u => fetchedUsers.add(u));
+  await Promise.all(missing.map(async uid => {
+    try {
+      const snap = await getDoc(doc(db, 'users', uid));
+      users[uid] = snap.exists() ? snap.data() : { name: 'Unknown', upiId: '' };
+    } catch (err) {
+      console.error('hydrateUsers', uid, err);
+      users[uid] = { name: 'Unknown', upiId: '' };
+    }
+  }));
+  render();
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render() {
+  if (!currentUser) return;
+  if (view.name === 'group') renderGroup(view.groupId);
+  else if (!groupsLoaded) renderDashboardSkeleton();
+  else renderDashboard();
+}
+function goDashboard() { view = { name: 'dashboard' }; render(); }
+function openGroup(id) { view = { name: 'group', groupId: id, tab: 'expenses' }; render(); }
+function switchTab(t) { view.tab = t; render(); }
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+function renderDashboard() {
+  let owedToMe = 0, iOwe = 0;
+  groups.forEach(g => {
+    const mine = round2(computeBalances(g.id)[currentUser.uid] || 0);
+    if (mine > 0.01) owedToMe += mine;
+    else if (mine < -0.01) iOwe += -mine;
+  });
+
+  const groupsHtml = groups.length
+    ? groups.map(g => {
+        const mine  = round2(computeBalances(g.id)[currentUser.uid] || 0);
+        const total = round2(expenses.filter(e => e.groupId === g.id).reduce((s, e) => s + e.amount, 0));
+        const label = mine > 0.01
+          ? `<span class="text-emerald-600 font-semibold">you get back ${fmt(mine)}</span>`
+          : mine < -0.01
+            ? `<span class="text-rose-600 font-semibold">you owe ${fmt(-mine)}</span>`
+            : `<span class="text-slate-400">settled up</span>`;
+        return `
+          <button onclick="openGroup('${g.id}')"
+            class="w-full bg-white rounded-xl p-4 border border-slate-200 hover:border-indigo-400 hover:shadow-md active:scale-[.99] transition text-left">
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-bold truncate">${esc(g.name)}</div>
+                <div class="text-sm text-slate-500 mt-0.5 truncate">${g.members.length} member${g.members.length === 1 ? '' : 's'} · ${fmt(total)} spent</div>
+                <div class="text-sm mt-1">${label}</div>
+              </div>
+              <div class="flex -space-x-2 shrink-0">
+                ${g.members.slice(0, 3).map(id => `<div class="w-8 h-8 rounded-full ${colorFor(id)} text-white text-xs flex items-center justify-center font-bold border-2 border-white">${initials(getUser(id).name)}</div>`).join('')}
+                ${g.members.length > 3 ? `<div class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 text-xs flex items-center justify-center font-bold border-2 border-white">+${g.members.length - 3}</div>` : ''}
+              </div>
+            </div>
+          </button>`;
+      }).join('')
+    : `<div class="bg-white rounded-xl p-12 text-center border border-dashed border-slate-300">
+         <div class="text-4xl mb-2">👥</div>
+         <p class="text-slate-500">No groups yet. Create one to start splitting.</p>
+       </div>`;
+
+  $('main').innerHTML = `
+    <div class="grid grid-cols-2 gap-3 mb-6">
+      <div class="bg-white rounded-xl p-4 border border-slate-200">
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide">You are owed</div>
+        <div class="text-2xl font-bold text-emerald-600 mt-1">${fmt(owedToMe)}</div>
+      </div>
+      <div class="bg-white rounded-xl p-4 border border-slate-200">
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide">You owe</div>
+        <div class="text-2xl font-bold text-rose-600 mt-1">${fmt(iOwe)}</div>
+      </div>
+    </div>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-bold">Your groups</h2>
+      <button onclick="openGroupModal()" class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 transition text-white text-sm font-semibold px-4 py-2 rounded-lg">+ New group</button>
+    </div>
+    <div class="space-y-3">${groupsHtml}</div>
+  `;
+}
+
+/* ============================================================
+   GROUP VIEW
+   ============================================================ */
+function renderGroup(groupId) {
+  const g = getGroup(groupId);
+  if (!g) { view = { name: 'dashboard' }; return render(); }
+  const tab   = view.tab || 'expenses';
+  const myBal = round2(computeBalances(g.id)[currentUser.uid] || 0);
+  const total = round2(expenses.filter(e => e.groupId === g.id).reduce((s, e) => s + e.amount, 0));
+  const balLabel = myBal > 0.01 ? `<span class="text-emerald-600">you get back ${fmt(myBal)}</span>`
+    : myBal < -0.01 ? `<span class="text-rose-600">you owe ${fmt(-myBal)}</span>`
+    : `<span class="text-slate-400">you're settled up</span>`;
+
+  $('main').innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="goDashboard()" class="text-sm text-slate-500 hover:text-indigo-600 font-medium">← All groups</button>
+      <button onclick="deleteGroup('${g.id}')" class="text-sm text-slate-400 hover:text-rose-600 font-medium">Delete group</button>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="text-xl font-bold truncate">${esc(g.name)}</h1>
+          <p class="text-sm text-slate-500 mt-0.5">${g.members.length} member${g.members.length === 1 ? '' : 's'} · ${fmt(total)} total</p>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <button onclick="openShareModal('${g.id}')"
+            class="text-sm border border-slate-300 hover:border-indigo-400 hover:text-indigo-600 px-3 py-2 rounded-lg font-medium">
+            🔗 Share
+          </button>
+          <button onclick="openMemberModal('${g.id}')"
+            class="text-sm border border-slate-300 hover:border-indigo-400 hover:text-indigo-600 px-3 py-2 rounded-lg font-medium">
+            + Member
+          </button>
+        </div>
+      </div>
+      <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-sm">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Your balance</span>
+        <span class="font-bold">${balLabel}</span>
+      </div>
+    </div>
+    <div class="flex gap-1 mb-4 bg-white rounded-xl p-1 border border-slate-200">
+      ${['expenses','balances','settle'].map(t => `
+        <button onclick="switchTab('${t}')"
+          class="tab-btn flex-1 py-2 rounded-lg text-sm font-semibold transition ${tab === t ? 'active' : 'text-slate-600 hover:bg-slate-100'}">
+          ${t === 'expenses' ? 'Expenses' : t === 'balances' ? 'Balances' : 'Settle up'}
+        </button>`).join('')}
+    </div>
+    <div id="tab-content"></div>
+    ${tab === 'expenses' ? `<button onclick="openExpenseModal('${g.id}')" aria-label="Add expense" class="fixed bottom-6 right-6 bg-indigo-600 hover:bg-indigo-700 active:scale-95 transition text-white w-14 h-14 rounded-full shadow-lg text-2xl font-bold z-40 safe-bottom">+</button>` : ''}
+  `;
+
+  const el = $('tab-content');
+  if (tab === 'expenses') el.innerHTML = renderExpensesTab(g);
+  else if (tab === 'balances') el.innerHTML = renderBalancesTab(g);
+  else el.innerHTML = renderSettleTab(g);
+}
+
+/* ---------- Expenses tab ---------- */
+function renderExpensesTab(g) {
+  const list = expenses.filter(e => e.groupId === g.id)
+    .sort((a, b) => (b.date?.toMillis?.() || new Date(b.date)) - (a.date?.toMillis?.() || new Date(a.date)));
+  if (!list.length) {
+    return `<div class="bg-white rounded-xl p-10 text-center border border-dashed border-slate-300">
+      <div class="text-3xl mb-2">🧾</div>
+      <p class="text-slate-500 text-sm">No expenses yet. Tap + to add one.</p>
+    </div>`;
+  }
+  return `<div class="space-y-2">
+    ${list.map(e => {
+      const payer = getUser(e.payerId);
+      const myShare = round2((e.participants.find(p => p.userId === currentUser.uid) || {}).share || 0);
+      let sub;
+      if (e.payerId === currentUser.uid) {
+        const lent = round2(e.amount - myShare);
+        sub = lent > 0.01 ? `<span class="text-emerald-600 font-medium">you lent ${fmt(lent)}</span>` : `<span class="text-slate-500">you paid</span>`;
+      } else if (myShare > 0.01) sub = `<span class="text-rose-600 font-medium">you owe ${fmt(myShare)}</span>`;
+      else sub = `<span class="text-slate-400">not involved</span>`;
+      return `
+        <button onclick="openExpenseDetail('${e.id}')" class="w-full bg-white rounded-xl p-4 border border-slate-200 hover:border-indigo-300 active:scale-[.99] transition flex items-center gap-3 text-left">
+          ${avatar(e.payerId, 'w-10 h-10', 'text-sm')}
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold truncate">${esc(e.note || e.category)}</div>
+            <div class="text-xs text-slate-500 truncate">${esc(payer.name)} paid · ${e.participants.length} way split · ${relativeDate(e.date)}</div>
+            <div class="text-xs mt-0.5">${sub}</div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="font-bold">${fmt(e.amount)}</div>
+            <div class="text-xs text-slate-400">${esc(e.category)}</div>
+          </div>
+        </button>`;
+    }).join('')}
+  </div>`;
+}
+
+/* ---------- Expense detail ---------- */
+const SPLIT_LABELS = { equal: 'Split equally', custom: 'Exact amounts', shares: 'By shares' };
+
+function openExpenseDetail(expenseId) {
+  const e = expenses.find(x => x.id === expenseId);
+  if (!e) return;
+  const payer = getUser(e.payerId);
+  const rows = e.participants.slice().sort((a, b) => b.share - a.share).map(p => {
+    const u = getUser(p.userId);
+    const isPayer = p.userId === e.payerId;
+    return `<div class="flex items-center gap-3 py-1.5">
+      ${avatar(p.userId, 'w-8 h-8', 'text-xs')}
+      <div class="flex-1 min-w-0"><div class="text-sm font-medium truncate">${esc(u.name)} ${isMe(p.userId) ? '<span class="text-xs text-indigo-500">(you)</span>' : ''} ${isPayer ? '<span class="text-[10px] uppercase font-bold text-emerald-600 ml-1">paid</span>' : ''}</div></div>
+      <div class="text-sm font-semibold">${fmt(p.share)}</div>
+    </div>`;
+  }).join('');
+
+  $('expense-detail-body').innerHTML = `
+    <div class="flex items-start justify-between gap-4 mb-1">
+      <h2 class="text-lg font-bold">${esc(e.note || e.category)}</h2>
+      <div class="text-xl font-bold shrink-0">${fmt(e.amount)}</div>
+    </div>
+    <p class="text-xs text-slate-500 mb-4">${esc(e.category)} · ${new Date(e.date?.toDate ? e.date.toDate() : e.date).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })} · ${SPLIT_LABELS[e.splitType] || 'Split'}</p>
+    <div class="bg-slate-50 rounded-xl p-3 flex items-center gap-3 mb-4">
+      ${avatar(e.payerId, 'w-9 h-9', 'text-xs')}
+      <div class="text-sm"><strong>${esc(payer.name)}</strong> paid <strong>${fmt(e.amount)}</strong> ${isMe(e.payerId) ? '<span class="text-xs text-indigo-500">(you)</span>' : ''}</div>
+    </div>
+    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Split between ${e.participants.length}</h3>
+    <div class="divide-y divide-slate-100 max-h-64 overflow-y-auto">${rows}</div>
+    <div class="flex gap-2 mt-6">
+      <button onclick="closeModal('modal-expense-detail')" class="flex-1 py-2.5 rounded-lg border border-slate-300 font-medium hover:bg-slate-50">Close</button>
+      <button onclick="editExpense('${e.id}')" class="flex-1 py-2.5 rounded-lg border border-indigo-300 text-indigo-600 font-semibold hover:bg-indigo-50">Edit</button>
+      <button onclick="deleteExpense('${e.id}')" class="flex-1 py-2.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 font-semibold hover:bg-rose-100">Delete</button>
+    </div>`;
+  openModal('modal-expense-detail');
+}
+
+async function deleteExpense(id) {
+  const e = expenses.find(x => x.id === id);
+  if (!e) return;
+  const ok = await confirmDialog({ title: 'Delete this expense?', message: `"${e.note || e.category}" for ${fmt(e.amount)} will be removed and all balances recalculated.`, confirmText: 'Delete' });
+  if (!ok) return;
+  try { await deleteDoc(doc(db, 'expenses', id)); closeModal('modal-expense-detail'); toast('Expense deleted'); }
+  catch (err) { console.error(err); toast('Could not delete expense', 'error'); }
+}
+
+/* ---------- Balances tab ---------- */
+function memberStats(groupId) {
+  const g = getGroup(groupId);
+  const stats = {};
+  g.members.forEach(id => stats[id] = { paid: 0, share: 0 });
+  expenses.filter(e => e.groupId === groupId).forEach(e => {
+    if (stats[e.payerId]) stats[e.payerId].paid = round2(stats[e.payerId].paid + e.amount);
+    e.participants.forEach(p => { if (stats[p.userId]) stats[p.userId].share = round2(stats[p.userId].share + p.share); });
+  });
+  return stats;
+}
+
+function renderBalancesTab(g) {
+  const bal = computeBalances(g.id);
+  const stats = memberStats(g.id);
+  return `<div class="space-y-2">
+    ${g.members.map(id => {
+      const u = getUser(id);
+      const amt = round2(bal[id] || 0);
+      const st = stats[id];
+      const removable = !isMe(id) && st.paid < 0.01 && st.share < 0.01;
+      const label = amt > 0.01 ? `<span class="text-emerald-600 font-bold">gets back ${fmt(amt)}</span>`
+        : amt < -0.01 ? `<span class="text-rose-600 font-bold">owes ${fmt(-amt)}</span>`
+        : `<span class="text-slate-400 font-medium">settled</span>`;
+      return `<div class="bg-white rounded-xl p-4 border border-slate-200 flex items-center gap-3">
+        ${avatar(id)}
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold truncate">${esc(u.name)} ${isMe(id) ? '<span class="text-xs text-indigo-500">(you)</span>' : ''}</div>
+          <div class="text-xs text-slate-500 truncate">paid ${fmt(st.paid)} · share ${fmt(st.share)}</div>
+        </div>
+        <div class="text-right text-sm shrink-0">${label}
+          <div class="flex items-center justify-end gap-2 mt-1">
+            ${isMe(id) ? `<button onclick="editProfile()" class="text-[11px] text-slate-400 hover:text-indigo-600 font-semibold">Edit</button>` : ''}
+            ${removable ? `<button onclick="removeMember('${g.id}','${id}')" class="text-[11px] text-slate-400 hover:text-rose-600 font-semibold">Remove</button>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+/* ---------- Settle tab ---------- */
+let settleTxns = [];
+
+function renderSettleTab(g) {
+  const bal = computeBalances(g.id);
+  settleTxns = simplifyDebts(bal);
+  const history = settlements.filter(s => s.groupId === g.id)
+    .sort((a, b) => (b.paidAt?.toMillis?.() || 0) - (a.paidAt?.toMillis?.() || 0));
+
+  const historyHtml = history.length ? `
+    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 mt-6">Settlement history</h3>
+    <div class="space-y-2">
+      ${history.map(s => {
+        const from = getUser(s.fromUserId), to = getUser(s.toUserId);
+        return `<div class="bg-white rounded-xl p-3 border border-slate-200 flex items-center gap-3 text-sm">
+          <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold shrink-0">✓</div>
+          <div class="flex-1 min-w-0">
+            <div class="truncate"><strong>${esc(from.name)}</strong> paid <strong>${esc(to.name)}</strong></div>
+            <div class="text-xs text-slate-400">${relativeDate(s.paidAt)}</div>
+          </div>
+          <div class="font-semibold shrink-0">${fmt(s.amount)}</div>
+          <button onclick="deleteSettlement('${s.id}')" title="Undo settlement" aria-label="Undo settlement between ${esc(from.name)} and ${esc(to.name)}" class="text-slate-300 hover:text-rose-500 text-lg leading-none shrink-0">×</button>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  if (!settleTxns.length) {
+    return `<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-10 text-center">
+        <div class="text-4xl mb-2">🎉</div>
+        <p class="text-emerald-700 font-semibold">All settled up!</p>
+        <p class="text-emerald-600 text-sm mt-1">No pending payments in this group.</p>
+      </div>${historyHtml}`;
+  }
+
+  return `<div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4">
+      <p class="text-sm text-indigo-800"><strong>${settleTxns.length}</strong> payment${settleTxns.length === 1 ? '' : 's'} needed to settle everything — the minimum possible number of transfers.</p>
+    </div>
+    <div class="space-y-3">
+      ${settleTxns.map((t, idx) => {
+        const from = getUser(t.from), to = getUser(t.to);
+        const iAmPayer = t.from === currentUser.uid;
+        const iAmPayee = t.to === currentUser.uid;
+        const caption = iAmPayer ? 'You need to pay' : iAmPayee ? 'You will receive' : 'Between other members';
+        const btnClass = iAmPayer ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200';
+        return `<div class="bg-white rounded-xl p-4 border border-slate-200">
+          <div class="flex items-center gap-3 mb-3">
+            ${avatar(t.from, 'w-9 h-9', 'text-xs')}
+            <div class="text-slate-400">→</div>
+            ${avatar(t.to, 'w-9 h-9', 'text-xs')}
+            <div class="flex-1 min-w-0">
+              <div class="text-sm truncate"><strong>${esc(from.name)}</strong> pays <strong>${esc(to.name)}</strong></div>
+              <div class="text-xs text-slate-500">${caption}</div>
+            </div>
+            <div class="font-bold text-lg shrink-0">${fmt(t.amount)}</div>
+          </div>
+          <button onclick="openQRModal(${idx})" class="w-full py-2.5 rounded-lg ${btnClass} font-semibold text-sm transition">${iAmPayer ? '💳 Pay via UPI' : 'View UPI details'}</button>
+        </div>`;
+      }).join('')}
+    </div>${historyHtml}`;
+}
+
+async function deleteSettlement(id) {
+  const ok = await confirmDialog({ title: 'Undo this settlement?', message: 'Balances will be recalculated as if this payment never happened.', confirmText: 'Undo' });
+  if (!ok) return;
+  try { await deleteDoc(doc(db, 'settlements', id)); toast('Settlement removed'); }
+  catch (err) { console.error(err); toast('Could not remove settlement', 'error'); }
+}
+
+/* ============================================================
+   BALANCE MATH
+   ============================================================ */
+function computeBalances(groupId) {
+  const g = getGroup(groupId);
+  const bal = {};
+  if (!g) return bal;
+  g.members.forEach(id => bal[id] = 0);
+  expenses.filter(e => e.groupId === groupId).forEach(e => {
+    bal[e.payerId] = (bal[e.payerId] || 0) + e.amount;
+    e.participants.forEach(p => { bal[p.userId] = (bal[p.userId] || 0) - p.share; });
+  });
+  settlements.filter(s => s.groupId === groupId && s.status === 'paid').forEach(s => {
+    bal[s.fromUserId] = (bal[s.fromUserId] || 0) + s.amount;
+    bal[s.toUserId]   = (bal[s.toUserId]   || 0) - s.amount;
+  });
+  Object.keys(bal).forEach(k => bal[k] = round2(bal[k]));
+  return bal;
+}
+
+function simplifyDebts(balances) {
+  const debtors = [], creditors = [];
+  Object.entries(balances).forEach(([userId, amt]) => {
+    const r = round2(amt);
+    if (r < -0.01) debtors.push({ userId, amount: -r });
+    else if (r > 0.01) creditors.push({ userId, amount: r });
+  });
+  debtors.sort((a, b) => b.amount - a.amount);
+  creditors.sort((a, b) => b.amount - a.amount);
+  const txns = [];
+  let i = 0, j = 0;
+  while (i < debtors.length && j < creditors.length) {
+    const d = debtors[i], c = creditors[j];
+    const amt = round2(Math.min(d.amount, c.amount));
+    if (amt > 0.01) txns.push({ from: d.userId, to: c.userId, amount: amt });
+    d.amount = round2(d.amount - amt);
+    c.amount = round2(c.amount - amt);
+    if (d.amount < 0.01) i++;
+    if (c.amount < 0.01) j++;
+  }
+  return txns;
+}
+
+/* ============================================================
+   GROUP + MEMBERS
+   ============================================================ */
+function openGroupModal() { $('group-name').value = ''; openModal('modal-group'); }
+
+async function createGroup() {
+  const name = $('group-name').value.trim();
+  if (!name) return toast('Enter a group name', 'error');
+  const btn = $('group-create-btn');
+  btn.disabled = true;
+  try {
+    const ref = await addDoc(collection(db, 'groups'), { name, members: [currentUser.uid], createdAt: serverTimestamp() });
+    closeModal('modal-group'); toast('Group created'); openGroup(ref.id);
+  } catch (err) { console.error(err); toast('Could not create group', 'error'); }
+  finally { btn.disabled = false; }
+}
+
+let pendingGroupId = null;
+
+function openMemberModal(groupId) {
+  pendingGroupId = groupId;
+  const g = getGroup(groupId); if (!g) return;
+  const existing = Object.values(users).filter(u => u.uid && !g.members.includes(u.uid));
+  $('member-options').innerHTML = existing.length
+    ? existing.map(u => `<button onclick="addExistingMember('${u.uid}')" class="w-full flex items-center gap-3 p-2 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 text-left transition">
+        ${avatar(u.uid, 'w-8 h-8', 'text-xs')}
+        <div class="min-w-0">
+          <div class="font-semibold text-sm truncate">${esc(u.name)}</div>
+          <div class="text-xs text-slate-500 truncate">${esc(u.email || '')}</div>
+        </div>
+      </button>`).join('')
+    : `<p class="text-sm text-slate-400 text-center py-3">No known people yet — use 🔗 Share to send an invite link.</p>`;
+  $('member-email').value = '';
+  openModal('modal-member');
+}
+
+async function addExistingMember(userId) {
+  const g = getGroup(pendingGroupId);
+  if (!g || g.members.includes(userId)) return;
+  try { await updateDoc(doc(db, 'groups', g.id), { members: arrayUnion(userId) }); closeModal('modal-member'); toast('Member added'); }
+  catch (err) { console.error(err); toast('Could not add member', 'error'); }
+}
+
+async function addMemberByEmail() {
+  const email = $('member-email').value.trim().toLowerCase();
+  if (!email) return toast('Enter an email address', 'error');
+  const g = getGroup(pendingGroupId); if (!g) return;
+  const btn = $('member-email-btn');
+  btn.disabled = true;
+  try {
+    const snap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+    if (snap.empty) return toast('No SplitUPI user with that email', 'error');
+    const userDoc = snap.docs[0];
+    if (g.members.includes(userDoc.id)) return toast('Already a member', 'info');
+    await updateDoc(doc(db, 'groups', g.id), { members: arrayUnion(userDoc.id) });
+    users[userDoc.id] = userDoc.data();
+    closeModal('modal-member'); toast('Member added');
+  } catch (err) { console.error(err); toast('Could not add member', 'error'); }
+  finally { btn.disabled = false; }
+}
+
+async function removeMember(groupId, userId) {
+  const g = getGroup(groupId);
+  const u = getUser(userId);
+  if (!g) return;
+  const ok = await confirmDialog({ title: `Remove ${u.name}?`, message: 'They have no expenses in this group, so nothing will change balance-wise.', confirmText: 'Remove' });
+  if (!ok) return;
+  try { await updateDoc(doc(db, 'groups', groupId), { members: g.members.filter(id => id !== userId) }); toast('Member removed'); }
+  catch (err) { console.error(err); toast('Could not remove member', 'error'); }
+}
+
+async function deleteGroup(id) {
+  const g = getGroup(id); if (!g) return;
+  const ok = await confirmDialog({ title: `Delete "${g.name}"?`, message: 'All expenses and settlements in this group will be permanently deleted.', confirmText: 'Delete' });
+  if (!ok) return;
+  try {
+    const batch = writeBatch(db);
+    expenses.filter(e => e.groupId === id).forEach(e => batch.delete(doc(db, 'expenses', e.id)));
+    settlements.filter(s => s.groupId === id).forEach(s => batch.delete(doc(db, 'settlements', s.id)));
+    batch.delete(doc(db, 'groups', id));
+    await batch.commit();
+    view = { name: 'dashboard' }; render(); toast('Group deleted');
+  } catch (err) { console.error(err); toast('Could not delete group', 'error'); }
+}
+
+/* ============================================================
+   EXPENSE FORM
+   ============================================================ */
+const expForm = { groupId: null, editId: null, splitType: 'equal', checked: {}, values: {}, payerId: null };
+
+function openExpenseModal(groupId, editingExpense = null) {
+  const g = getGroup(groupId);
+  if (!g || !g.members.length) return toast('This group has no members yet', 'error');
+  expForm.groupId = groupId;
+  expForm.editId = editingExpense ? editingExpense.id : null;
+  expForm.checked = {}; expForm.values = {};
+
+  $('expense-modal-title').textContent = editingExpense ? 'Edit Expense' : 'Add Expense';
+  $('expense-save-btn-text').textContent = editingExpense ? 'Save changes' : 'Save expense';
+
+  if (editingExpense) {
+    g.members.forEach(id => { expForm.checked[id] = false; expForm.values[id] = ''; });
+    editingExpense.participants.forEach(p => {
+      expForm.checked[p.userId] = true;
+      expForm.values[p.userId] = String(p.share);
+    });
+    $('exp-note').value = editingExpense.note || '';
+    $('exp-amount').value = String(editingExpense.amount);
+    $('exp-category').value = editingExpense.category || 'Food';
+    const d = editingExpense.date?.toDate ? editingExpense.date.toDate() : new Date(editingExpense.date);
+    $('exp-date').value = d.toISOString().slice(0, 10);
+    expForm.payerId = editingExpense.payerId;
+    $('exp-payer').innerHTML = g.members.map(id => `<option value="${id}"${id === expForm.payerId ? ' selected' : ''}>${esc(getUser(id).name)}</option>`).join('');
+    setSplitType(editingExpense.splitType || 'equal');
+  } else {
+    g.members.forEach(id => { expForm.checked[id] = true; expForm.values[id] = ''; });
+    $('exp-note').value = '';
+    $('exp-amount').value = '';
+    $('exp-category').value = 'Food';
+    $('exp-date').value = new Date().toISOString().slice(0, 10);
+    expForm.payerId = g.members.includes(currentUser.uid) ? currentUser.uid : g.members[0];
+    $('exp-payer').innerHTML = g.members.map(id => `<option value="${id}"${id === expForm.payerId ? ' selected' : ''}>${esc(getUser(id).name)}</option>`).join('');
+    setSplitType('equal');
+  }
+  openModal('modal-expense');
+}
+
+function editExpense(expenseId) {
+  const e = expenses.find(x => x.id === expenseId);
+  if (!e) return;
+  closeModal('modal-expense-detail');
+  setTimeout(() => openExpenseModal(e.groupId, e), 150);
+}
+
+function setSplitType(type) {
+  expForm.splitType = type;
+  document.querySelectorAll('.split-opt').forEach(b => {
+    const active = b.dataset.split === type;
+    b.className = `split-opt py-2 rounded-lg border-2 font-semibold text-sm transition ${active ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`;
+  });
+  $('exp-fill-even').classList.toggle('hidden', type !== 'custom');
+  renderParticipantInputs();
+}
+
+function toggleAllParticipants() {
+  const g = getGroup(expForm.groupId);
+  const allOn = g.members.every(id => expForm.checked[id]);
+  g.members.forEach(id => expForm.checked[id] = !allOn);
+  renderParticipantInputs();
+}
+
+function fillEvenly() {
+  const g = getGroup(expForm.groupId);
+  const amount = parseAmount($('exp-amount').value);
+  const selected = g.members.filter(id => expForm.checked[id]);
+  if (!selected.length || amount <= 0) return toast('Enter an amount first', 'error');
+  const base = Math.floor((amount / selected.length) * 100) / 100;
+  const remainder = round2(amount - base * selected.length);
+  selected.forEach((id, i) => { expForm.values[id] = (i === 0 ? round2(base + remainder) : base).toFixed(2); });
+  renderParticipantInputs();
+}
+
+function renderParticipantInputs() {
+  const g = getGroup(expForm.groupId); if (!g) return;
+  const container = $('exp-participants');
+  const amount = parseAmount($('exp-amount').value);
+  const selected = g.members.filter(id => expForm.checked[id]);
+  const showInput = expForm.splitType !== 'equal';
+  let weights = {}, totalWeight = 0;
+  if (expForm.splitType === 'shares') {
+    selected.forEach(id => { const w = Math.max(0, parseFloat(expForm.values[id]) || 0); weights[id] = w; totalWeight += w; });
+  }
+  container.innerHTML = g.members.map(id => {
+    const u = getUser(id);
+    const checked = !!expForm.checked[id];
+    const val = expForm.values[id] ?? '';
+    let preview = '';
+    if (showInput && checked && expForm.splitType === 'shares' && totalWeight > 0 && amount > 0) {
+      preview = `<span class="text-[11px] text-slate-400 w-16 text-right tabular-nums">≈ ${fmt(amount * weights[id] / totalWeight)}</span>`;
+    }
+    return `<div class="flex items-center gap-2.5 p-2 rounded-lg transition ${checked ? 'bg-indigo-50' : 'bg-slate-50'}">
+      <input type="checkbox" data-pid="${id}" ${checked ? 'checked' : ''} class="w-4 h-4 accent-indigo-600 shrink-0" />
+      ${avatar(id, 'w-8 h-8', 'text-xs')}
+      <div class="flex-1 text-sm font-medium truncate">${esc(u.name)}${isMe(id) ? ' <span class="text-xs text-indigo-500">(you)</span>' : ''}</div>
+      ${preview}
+      ${showInput ? `<input type="text" inputmode="decimal" data-pid="${id}" value="${esc(val)}" placeholder="${expForm.splitType === 'custom' ? '₹' : 'wt'}" class="w-20 px-2 py-1.5 text-sm text-right rounded border border-slate-300 focus:border-indigo-500 outline-none bg-white" ${!checked ? 'disabled' : ''} />` : ''}
+    </div>`;
+  }).join('');
+  updateSplitHint();
+}
+
+$('exp-participants').addEventListener('input', e => {
+  const inp = e.target.closest('input[data-pid]');
+  if (!inp || inp.type === 'checkbox') return;
+  expForm.values[inp.dataset.pid] = inp.value;
+  updateSplitHint();
+});
+$('exp-participants').addEventListener('change', e => {
+  const cb = e.target.closest('input[type=checkbox][data-pid]');
+  if (!cb) return;
+  expForm.checked[cb.dataset.pid] = cb.checked;
+  renderParticipantInputs();
+});
+$('exp-amount').addEventListener('input', () => {
+  updateSplitHint();
+  if (expForm.splitType === 'shares') renderParticipantInputs();
+});
+
+function updateSplitHint() {
+  const g = getGroup(expForm.groupId); if (!g) return;
+  const hint = $('exp-split-hint');
+  const amount = parseAmount($('exp-amount').value);
+  const selected = g.members.filter(id => expForm.checked[id]);
+  if (!selected.length) { hint.innerHTML = `<span class="text-amber-600">Select at least one participant.</span>`; return; }
+  if (expForm.splitType === 'equal') {
+    hint.innerHTML = amount > 0 ? `${selected.length} × <strong>${fmt(amount / selected.length)}</strong> each` : `Split equally between ${selected.length} ${selected.length === 1 ? 'person' : 'people'}.`;
+    return;
+  }
+  if (expForm.splitType === 'custom') {
+    const entered = round2(selected.reduce((s, id) => s + (parseFloat(expForm.values[id]) || 0), 0));
+    const left = round2(amount - entered);
+    if (amount <= 0) hint.innerHTML = `Enter the total amount first.`;
+    else if (Math.abs(left) < 0.01) hint.innerHTML = `<span class="text-emerald-600 font-semibold">✓ Amounts add up exactly.</span>`;
+    else if (left > 0) hint.innerHTML = `Entered <strong>${fmt(entered)}</strong> of ${fmt(amount)} — <span class="text-amber-600 font-semibold">${fmt(left)} left</span>`;
+    else hint.innerHTML = `Entered <strong>${fmt(entered)}</strong> of ${fmt(amount)} — <span class="text-rose-600 font-semibold">${fmt(-left)} over</span>`;
+    return;
+  }
+  const totalW = selected.reduce((s, id) => s + (parseFloat(expForm.values[id]) || 0), 0);
+  hint.innerHTML = totalW > 0 && amount > 0 ? `Total weight <strong>${totalW}</strong> · 1 share = <strong>${fmt(amount / totalW)}</strong>` : `Enter share weights — e.g. 2 for a couple, 1 for a single person.`;
+}
+
+async function saveExpense() {
+  const g = getGroup(expForm.groupId); if (!g) return;
+  const note = $('exp-note').value.trim();
+  const amount = parseAmount($('exp-amount').value);
+  const category = $('exp-category').value;
+  const payerId = $('exp-payer').value;
+  const dateStr = $('exp-date').value;
+  if (!note) return toast('Add a description', 'error');
+  if (amount <= 0) return toast('Enter a valid amount', 'error');
+  const selected = g.members.filter(id => expForm.checked[id]);
+  if (!selected.length) return toast('Select at least one participant', 'error');
+
+  const participants = [];
+  if (expForm.splitType === 'equal') {
+    const share = round2(amount / selected.length);
+    selected.forEach(id => participants.push({ userId: id, share }));
+  } else if (expForm.splitType === 'custom') {
+    const inputs = {};
+    selected.forEach(id => inputs[id] = round2(parseFloat(expForm.values[id]) || 0));
+    if (Object.values(inputs).some(v => v < 0)) return toast('Amounts cannot be negative', 'error');
+    const total = round2(Object.values(inputs).reduce((a, b) => a + b, 0));
+    if (Math.abs(total - amount) > 0.01) return toast(`Amounts must add up to ${fmt(amount)} (currently ${fmt(total)})`, 'error');
+    selected.forEach(id => participants.push({ userId: id, share: inputs[id] }));
+  } else {
+    const weights = {};
+    selected.forEach(id => weights[id] = Math.max(0, parseFloat(expForm.values[id]) || 0));
+    const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+    if (totalWeight <= 0) return toast('Enter share weights', 'error');
+    selected.forEach(id => participants.push({ userId: id, share: round2(amount * weights[id] / totalWeight) }));
+  }
+  const sum = round2(participants.reduce((s, p) => s + p.share, 0));
+  const drift = round2(amount - sum);
+  if (Math.abs(drift) > 0 && participants.length) participants[0].share = round2(participants[0].share + drift);
+
+  const when = dateStr ? new Date(dateStr + 'T12:00:00') : new Date();
+  const btn = $('expense-save-btn');
+  btn.disabled = true;
+  try {
+    if (expForm.editId) {
+      await updateDoc(doc(db, 'expenses', expForm.editId), {
+        groupId: g.id, groupMembers: g.members, payerId, amount, category, note, date: when,
+        splitType: expForm.splitType, participants, updatedAt: serverTimestamp()
+      });
+      toast('Expense updated');
+    } else {
+      await addDoc(collection(db, 'expenses'), {
+        groupId: g.id, groupMembers: g.members, payerId, amount, category, note, date: when,
+        splitType: expForm.splitType, participants, createdAt: serverTimestamp()
+      });
+      toast('Expense added');
+    }
+    closeModal('modal-expense');
+    view = { name: 'group', groupId: g.id, tab: 'expenses' };
+  } catch (err) { console.error(err); toast('Could not save expense', 'error'); }
+  finally { btn.disabled = false; }
+}
+
+/* ============================================================
+   UPI QR + SETTLEMENTS
+   ============================================================ */
+let pendingTxn = null;
+
+function openQRModal(index) {
+  const t = settleTxns[index]; if (!t) return;
+  const g = getGroup(view.groupId);
+  const from = getUser(t.from), to = getUser(t.to);
+  pendingTxn = { ...t, groupId: view.groupId, groupMembers: g.members };
+  $('qr-subtitle').textContent = `${from.name} → ${to.name}`;
+  $('qr-details').innerHTML = `
+    <div><strong>Amount:</strong> ${fmt(t.amount)}</div>
+    <div><strong>Payee:</strong> ${esc(to.name)}</div>
+    <div><strong>UPI ID:</strong> ${esc(to.upiId || 'Not set')}</div>
+    ${g ? `<div class="text-xs text-slate-400 pt-1">${esc(g.name)}</div>` : ''}`;
+  const qrBox = $('qr-container'); qrBox.innerHTML = '';
+  const upiLink = buildUPILink(to, t.amount, `SplitUPI · ${g ? g.name : ''}`.slice(0, 50));
+  $('qr-deeplink').href = upiLink;
+  $('qr-copy').style.display = to.upiId ? '' : 'none';
+  if (to.upiId && window.QRCode) {
+    new QRCode(qrBox, { text: upiLink, width: 200, height: 200, colorDark: '#0f172a', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+  } else {
+    qrBox.innerHTML = `<div style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;color:#94a3b8;font-size:13px;">${to.upiId ? 'QR library unavailable — use the button below.' : 'Payee has no UPI ID set.'}</div>`;
+  }
+  $('qr-settle-btn').disabled = false;
+  $('qr-settle-btn').textContent = '✅ Mark as settled';
+  openModal('modal-qr');
+}
+
+function buildUPILink(user, amount, note) {
+  const params = new URLSearchParams({ pa: user.upiId || '', pn: user.name || 'Payee', am: Number(amount).toFixed(2), cu: 'INR', tn: note || 'SplitUPI settlement' });
+  return `upi://pay?${params.toString()}`;
+}
+
+function copyPayeeUpi() {
+  if (!pendingTxn) return;
+  const upi = getUser(pendingTxn.to).upiId;
+  if (!upi) return;
+  navigator.clipboard?.writeText(upi).then(() => toast('UPI ID copied')).catch(() => toast('Could not copy', 'error'));
+}
+
+async function markPaid() {
+  if (!pendingTxn) return;
+  const btn = $('qr-settle-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const txn = { ...pendingTxn };
+  try {
+    await addDoc(collection(db, 'settlements'), {
+      groupId: txn.groupId, groupMembers: txn.groupMembers,
+      fromUserId: txn.from, toUserId: txn.to, amount: txn.amount,
+      status: 'paid', upiRef: 'SIM' + uid().toUpperCase(),
+      createdAt: serverTimestamp(), paidAt: serverTimestamp()
+    });
+    pendingTxn = null;
+    closeModal('modal-qr');
+    const remaining = simplifyDebts(computeBalances(txn.groupId)).length;
+    view = { name: 'group', groupId: txn.groupId, tab: 'settle' };
+    toast(remaining === 0 ? '🎉 Everything is settled up!' : 'Payment recorded');
+  } catch (err) {
+    console.error(err); btn.disabled = false; btn.textContent = '✅ Mark as settled';
+    toast('Could not record payment', 'error');
+  }
+}
+
+/* ============================================================
+   SHARING — invite links, summaries
+   ============================================================ */
+function getBaseUrl() {
+  const origin = window.location.origin;
+  if (!origin || origin === 'null') return 'https://splitupi-ce51c.web.app';
+  return origin + window.location.pathname;
+}
+
+function buildInviteLink(groupId) {
+  const url = new URL(getBaseUrl());
+  url.searchParams.set('join', groupId);
+  return url.toString();
+}
+
+function buildGroupSummary(g) {
+  const lines = [];
+  lines.push(`📊 ${g.name} — SplitUPI summary`);
+  lines.push(`👥 ${g.members.length} members`);
+  lines.push('');
+
+  const list = expenses
+    .filter(e => e.groupId === g.id)
+    .sort((a, b) => (b.date?.toMillis?.() || new Date(b.date)) - (a.date?.toMillis?.() || new Date(a.date)));
+
+  const total = round2(list.reduce((s, e) => s + e.amount, 0));
+  lines.push(`💰 Total spent: ${fmt(total)}`);
+  if (list.length) {
+    lines.push('');
+    lines.push('Recent expenses:');
+    list.slice(0, 10).forEach(e => {
+      const payer = getUser(e.payerId);
+      const dt = new Date(e.date?.toDate ? e.date.toDate() : e.date);
+      lines.push(`  • ${dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} — ${e.note || e.category} — ${fmt(e.amount)} (paid by ${payer.name})`);
+    });
+    if (list.length > 10) lines.push(`  … and ${list.length - 10} more`);
+  }
+
+  const txns = simplifyDebts(computeBalances(g.id));
+  lines.push('');
+  if (!txns.length) {
+    lines.push('✅ All settled up!');
+  } else {
+    lines.push('Settle up:');
+    txns.forEach(t => {
+      const from = getUser(t.from), to = getUser(t.to);
+      lines.push(`  • ${from.name} → ${to.name}: ${fmt(t.amount)}`);
+    });
+  }
+
+  lines.push('');
+  lines.push(`Join the group: ${buildInviteLink(g.id)}`);
+  return lines.join('\n');
+}
+
+let shareGroupId = null;
+
+function openShareModal(groupId) {
+  const g = getGroup(groupId);
+  if (!g) return;
+  shareGroupId = groupId;
+  $('share-link').textContent = buildInviteLink(groupId);
+  $('share-summary').textContent = buildGroupSummary(g);
+  const canNativeShare = typeof navigator.share === 'function';
+  $('share-native-btn').style.display = canNativeShare ? '' : 'none';
+  openModal('modal-share');
+}
+
+async function copyInviteLink() {
+  if (!shareGroupId) return;
+  const link = buildInviteLink(shareGroupId);
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('Invite link copied');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = link;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast('Invite link copied'); }
+    catch { toast('Could not copy', 'error'); }
+    ta.remove();
+  }
+}
+
+async function copySummary() {
+  if (!shareGroupId) return;
+  const g = getGroup(shareGroupId);
+  if (!g) return;
+  const text = buildGroupSummary(g);
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Summary copied');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast('Summary copied'); }
+    catch { toast('Could not copy', 'error'); }
+    ta.remove();
+  }
+}
+
+async function shareNative() {
+  if (!shareGroupId) return;
+  const g = getGroup(shareGroupId);
+  if (!g) return;
+  const link = buildInviteLink(shareGroupId);
+  try {
+    await navigator.share({
+      title: `Join "${g.name}" on SplitUPI`,
+      text: `Hey! Join my SplitUPI group "${g.name}" to split expenses:`,
+      url: link
+    });
+  } catch (err) {
+    if (err?.name !== 'AbortError') {
+      console.error(err);
+      toast('Sharing not available — link copied instead', 'info');
+      copyInviteLink();
+    }
+  }
+}
+
+/* ============================================================
+   JOIN VIA LINK
+   ============================================================ */
+let pendingJoinGroupId = null;
+
+async function checkJoinParam() {
+  const params = new URLSearchParams(window.location.search);
+  const groupId = params.get('join');
+  if (!groupId) return;
+  try {
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete('join');
+    window.history.replaceState({}, '', clean.toString());
+  } catch {}
+  if (!currentUser) {
+    sessionStorage.setItem('pendingJoinGroupId', groupId);
+    return;
+  }
+  await tryJoinGroup(groupId);
+}
+
+async function tryJoinGroup(groupId) {
+  try {
+    const snap = await getDoc(doc(db, 'groups', groupId));
+    if (!snap.exists()) { toast('That invite link is no longer valid', 'error'); return; }
+    const group = { id: snap.id, ...snap.data() };
+    if (group.members.includes(currentUser.uid)) {
+      toast(`You're already in "${group.name}"`, 'info');
+      openGroup(groupId);
+      return;
+    }
+    pendingJoinGroupId = groupId;
+    $('join-group-name').textContent = `"${group.name}"`;
+    $('join-error').classList.add('hidden');
+    $('join-accept-btn').disabled = false;
+    $('join-accept-btn').textContent = 'Join group';
+    openModal('modal-join');
+  } catch (err) {
+    console.error('tryJoinGroup failed', err);
+    toast('Could not load that group', 'error');
+  }
+}
+
+async function acceptJoin() {
+  if (!pendingJoinGroupId) return;
+  const gid = pendingJoinGroupId;
+  const btn = $('join-accept-btn');
+  btn.disabled = true;
+  btn.textContent = 'Joining…';
+  try {
+    await updateDoc(doc(db, 'groups', gid), { members: arrayUnion(currentUser.uid) });
+    pendingJoinGroupId = null;
+    closeModal('modal-join');
+    toast('Joined the group!');
+    setTimeout(() => openGroup(gid), 150);
+  } catch (err) {
+    console.error('acceptJoin failed', err);
+    $('join-error').textContent = err?.code === 'permission-denied'
+      ? 'You do not have permission to join this group. Ask the owner to re-share the link.'
+      : 'Could not join the group. Please try again.';
+    $('join-error').classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Join group';
+  }
+}
+
+function cancelJoin() {
+  pendingJoinGroupId = null;
+  closeModal('modal-join');
+}
+
+async function flushPendingJoin() {
+  const gid = sessionStorage.getItem('pendingJoinGroupId');
+  if (!gid) return;
+  sessionStorage.removeItem('pendingJoinGroupId');
+  await tryJoinGroup(gid);
+}
+
+/* ============================================================
+   PROFILE EDIT
+   ============================================================ */
+async function editProfile() {
+  const name = prompt('Your display name:', profile.name);
+  if (name === null) return;
+  const upi = prompt('Your UPI ID:', profile.upiId || '');
+  if (upi === null) return;
+  const trimmedName = name.trim();
+  if (!trimmedName) return toast('Name cannot be empty', 'error');
+  try {
+    await updateDoc(doc(db, 'users', currentUser.uid), { name: trimmedName, upiId: upi.trim() });
+    profile.name = trimmedName; profile.upiId = upi.trim();
+    users[currentUser.uid] = profile;
+    $('hdr-name').textContent = profile.name;
+    $('hdr-upi').textContent = profile.upiId || 'No UPI ID set';
+    toast('Profile updated'); render();
+  } catch (err) { console.error(err); toast('Could not update profile', 'error'); }
+}
+
+/* ============================================================
+   Expose to inline onclick handlers
+   ============================================================ */
+Object.assign(window, {
+  toggleAuthMode, handleAuth, signOut, forgotPassword,
+  goDashboard, openGroup, switchTab,
+  openGroupModal, createGroup,
+  openMemberModal, addExistingMember, addMemberByEmail, removeMember, deleteGroup,
+  openExpenseModal, setSplitType, toggleAllParticipants, fillEvenly, saveExpense,
+  openExpenseDetail, deleteExpense, editExpense,
+  openQRModal, copyPayeeUpi, markPaid,
+  deleteSettlement, editProfile,
+  openModal, closeModal, resolveConfirm,
+  openShareModal, copyInviteLink, copySummary, shareNative,
+  acceptJoin, cancelJoin
+});
+
+console.log('[SplitUPI] All handlers registered');
+</script>
+</body>
+</html>
